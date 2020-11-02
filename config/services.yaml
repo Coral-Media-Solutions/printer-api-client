@@ -4,7 +4,11 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
 parameters:
-
+    API:
+        API_URL: '%env(resolve:API_URL)%'
+        API_LOGIN_URL: '%env(resolve:API_LOGIN_URL)%'
+        API_USERNAME: '%env(resolve:API_USERNAME)%'
+        API_PASSWORD: '%env(resolve:API_PASSWORD)%'
 services:
     # default configuration for services in *this* file
     _defaults:
@@ -14,17 +18,17 @@ services:
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name
     App\:
-        resource: '../src/'
+        resource: '../src/App/'
         exclude:
-            - '../src/DependencyInjection/'
-            - '../src/Entity/'
-            - '../src/Kernel.php'
-            - '../src/Tests/'
+            - '../src/App/DependencyInjection/'
+            - '../src/App/Entity/'
+            - '../src/App/Kernel.php'
+            - '../src/App/Tests/'
 
     # controllers are imported separately to make sure services can be injected
     # as action arguments even if you don't extend any base controller class
     App\Controller\:
-        resource: '../src/Controller/'
+        resource: '../src/App/Controller/'
         tags: ['controller.service_arguments']
 
     # add more service definitions when explicit configuration is needed
