@@ -8,3 +8,7 @@
 /var/
 /vendor/
 ###< symfony/framework-bundle ###
+
+###> jetbrains/ide ###
+.idea
+###< jetbrains/ide ###
