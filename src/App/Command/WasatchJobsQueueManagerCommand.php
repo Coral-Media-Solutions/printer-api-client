@@ -47,7 +47,7 @@ class WasatchJobsQueueManagerCommand extends Command
             ->addOption(
                 'hosonsoft-path', null, InputOption::VALUE_OPTIONAL,
                 'Hosonsoft PrintExp installation directory',
-                '/var/www/webapps/printer-api-client/var'
+                'C:\Program Files (x86)\PrintExp_V5.6.2.56.R'
             )
             ->addOption(
                 'hosonsoft-threshold', null, InputOption::VALUE_OPTIONAL,
