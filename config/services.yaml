@@ -9,6 +9,10 @@ parameters:
         API_LOGIN_URL: '%env(resolve:API_LOGIN_URL)%'
         API_USERNAME: '%env(resolve:API_USERNAME)%'
         API_PASSWORD: '%env(resolve:API_PASSWORD)%'
+    SFTP:
+        SFTP_SERVER: '%env(resolve:SFTP_SERVER)%'
+        SFTP_USER: '%env(resolve:SFTP_USER)%'
+        SFTP_PASSWORD: '%env(resolve:SFTP_PASSWORD)%'
 services:
     # default configuration for services in *this* file
     _defaults:
