@@ -97,7 +97,7 @@ class WasatchJobsQueueManagerCommand extends Command
             $this->_cleanPrintJobsFolder();
         }
 
-        if ($this->$this->_getPrintJobsFolders()->count() <= $this->options['hosonsoft-threshold']) {
+        if ($this->_getPrintJobsFolders()->count() <= $this->options['hosonsoft-threshold']) {
             return $this->_moveFilesToWasatchHotfolder($io);
         } else {
             $io->warning('Files not moved, threshold not reached');
