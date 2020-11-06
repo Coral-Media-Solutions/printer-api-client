@@ -120,6 +120,9 @@ class WasatchJobsQueueManagerCommand extends Command
         ->filter(
             function (SplFileInfo $file) use ($empty) {
                 $fileFinder = new Finder();
+                if ($file->isFile()) {
+                    return false;
+                }
                 if ($file->isDir() && $fileFinder->in($file->getRealPath())->files()->count() > 0) {
                     return !$empty;
                 }
