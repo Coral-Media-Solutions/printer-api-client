@@ -2,6 +2,7 @@
 
 namespace App\Command;
 
+use phpseclib\Net\SFTP;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -9,6 +10,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Finder\SplFileInfo;
@@ -20,11 +22,14 @@ class WasatchJobsQueueManagerCommand extends Command
     protected $arguments;
     protected $options;
     protected $logger;
+    protected $params;
+    protected $sftp;
 
-    public function __construct(LoggerInterface $logger, string $name = null)
+    public function __construct(LoggerInterface $logger, ParameterBagInterface $params, string $name = null)
     {
         parent::__construct($name);
         $this->logger = $logger;
+        $this->params = $params;
     }
 
     protected function configure()
@@ -36,6 +41,12 @@ class WasatchJobsQueueManagerCommand extends Command
                 'Location containing files'
             )
             ->addArgument('destination', InputArgument::REQUIRED, 'Wasatch Hotfolder')
+            ->addOption(
+                'local-source', null, InputOption::VALUE_OPTIONAL,
+                'Source is a local directory, if false (default) command looks' .
+                'for it in a remote server (SFTP)',
+                0
+            )
             ->addOption(
                 'wasatch-file-limit', null, InputOption::VALUE_OPTIONAL,
                 'File Limit', 5
@@ -53,6 +64,10 @@ class WasatchJobsQueueManagerCommand extends Command
                 'hosonsoft-threshold', null, InputOption::VALUE_OPTIONAL,
                 'Hosonsoft print jobs threshold', 2
             )
+            ->addOption(
+                'clean-first', null, InputOption::VALUE_OPTIONAL,
+                'Clean Hosonsoft empty temporary folders and old printing jobs', 1
+            )
         ;
     }
 
@@ -68,7 +83,8 @@ class WasatchJobsQueueManagerCommand extends Command
             'hosonsoft-path' => $input->getOption('hosonsoft-path'),
             'hosonsoft-threshold' => $input->getOption('hosonsoft-threshold'),
             'wasatch-file-extension' => $input->getOption('wasatch-file-extension'),
-            'wasatch-file-limit' => $input->getOption('wasatch-file-limit')
+            'wasatch-file-limit' => $input->getOption('wasatch-file-limit'),
+            'clean-first' => $input->getOption('clean-first')
         ];
 
         $this->logger->notice(
@@ -76,7 +92,12 @@ class WasatchJobsQueueManagerCommand extends Command
             ['arguments' => $this->arguments, 'options' => $this->options]
         );
 
-        if ($this->_checkPrintJobsThreshold() <= $this->options['hosonsoft-threshold']) {
+        if ($this->options['clean-first'] == 1) {
+            $io->warning('Cleaning print jobs folder...');
+            $this->_cleanPrintJobsFolder();
+        }
+
+        if ($this->$this->_getPrintJobsFolders()->count() <= $this->options['hosonsoft-threshold']) {
             return $this->_moveFilesToWasatchHotfolder($io);
         } else {
             $io->warning('Files not moved, threshold not reached');
@@ -85,23 +106,26 @@ class WasatchJobsQueueManagerCommand extends Command
         return Command::SUCCESS;
     }
 
+    private function _cleanPrintJobsFolder()
+    {
+        $fileSystem = new Filesystem();
+        $fileSystem->remove($this->_getPrintJobsFolders(true)->getIterator());
+    }
 
-    private function _checkPrintJobsThreshold()
+    private function _getPrintJobsFolders($empty = false)
     {
         $fileFinder = new Finder();
-        return
-            $fileFinder->in(
-                $this->options['hosonsoft-path'] . DIRECTORY_SEPARATOR . 'temp')
-                ->filter(
-                    function (SplFileInfo $file) {
-                        $fileFinder = new Finder();
-                        if ($file->isDir() && $fileFinder->in($file->getRealPath())->files()->count() > 0) {
-                            return true;
-                        }
-                        return false;
-                    }
-                )
-                ->count();
+        return $fileFinder->in(
+        $this->options['hosonsoft-path'] . DIRECTORY_SEPARATOR . 'temp')
+        ->filter(
+            function (SplFileInfo $file) use ($empty) {
+                $fileFinder = new Finder();
+                if ($file->isDir() && $fileFinder->in($file->getRealPath())->files()->count() > 0) {
+                    return !$empty;
+                }
+                return $empty;
+            }
+        );
     }
 
     private function _moveFilesToWasatchHotfolder(SymfonyStyle $io)
@@ -120,13 +144,14 @@ class WasatchJobsQueueManagerCommand extends Command
                 $fileSystem->rename(
                     $fileToMove->getRealPath(), $this->arguments['destination'] . '/' . $fileToMove->getFilename(), true
                 );
-                $this->logger->info(
-                    sprintf(
-                        'File %s moved from %s to %s',
-                        $fileToMove->getFilename(),
-                        $this->arguments['source'], $this->arguments['destination']
-                    )
+                $msg = sprintf(
+                    'File %s moved from %s to %s',
+                    $fileToMove->getFilename(),
+                    $this->arguments['source'], $this->arguments['destination']
                 );
+
+                $this->logger->info($msg);
+                $io->success($msg);
                 $i++;
             }
         }
