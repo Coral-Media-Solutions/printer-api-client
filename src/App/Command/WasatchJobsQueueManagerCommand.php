@@ -179,6 +179,7 @@ class WasatchJobsQueueManagerCommand extends Command
                     );
                     $this->logger->info($msg);
                     $io->success($msg);
+                    $i++;
                 } else {
                     if(substr(
                             $fileToMove['filename'], -4
@@ -204,6 +205,7 @@ class WasatchJobsQueueManagerCommand extends Command
                                 );
                                 $this->logger->info($msg);
                                 $io->success($msg);
+                                $i++;
                             } else {
                                 $msg = sprintf(
                                     'Remote file %s can\'t be deleted from %s',
@@ -224,7 +226,6 @@ class WasatchJobsQueueManagerCommand extends Command
                         }
                     }
                 }
-                $i++;
             }
         }
 
