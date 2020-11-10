@@ -84,7 +84,8 @@ class WasatchJobsQueueManagerCommand extends Command
             'hosonsoft-threshold' => $input->getOption('hosonsoft-threshold'),
             'wasatch-file-extension' => $input->getOption('wasatch-file-extension'),
             'wasatch-file-limit' => $input->getOption('wasatch-file-limit'),
-            'clean-first' => $input->getOption('clean-first')
+            'clean-first' => $input->getOption('clean-first'),
+            'local-source' => $input->getOption('local-source'),
         ];
 
         $this->logger->notice(
@@ -131,30 +132,98 @@ class WasatchJobsQueueManagerCommand extends Command
         );
     }
 
+    private function _connectToSftp(SymfonyStyle $io) {
+        $sftp = new SFTP($this->params->get('SFTP')['SFTP_SERVER']);
+        if (!$sftp->login(
+            $this->params->get('SFTP')['SFTP_USER'], $this->params->get('SFTP')['SFTP_PASSWORD'])
+        ) {
+            $io->error('SFTP login error.');
+            $this->logger->error('SFTP login error.', []);
+            return Command::FAILURE;
+        }
+        return $sftp;
+    }
+
     private function _moveFilesToWasatchHotfolder(SymfonyStyle $io)
     {
         $fileFinder = new Finder();
         $fileSystem = new Filesystem();
-        $filesToMove = $fileFinder->in($this->arguments['source'])->sortByName()
-            ->files()->name($this->options['wasatch-file-extension']);
+        if($this->options['local-source'] == 1) {
+            $filesToMove = $fileFinder->in($this->arguments['source'])->sortByName()
+                ->files()->name($this->options['wasatch-file-extension']);
+            $filesToMoveCounter = $filesToMove->count();
+        } else {
+            $sftp = $this->_connectToSftp($io);
+            $filesToMove = $sftp->rawlist($this->arguments['source']);
+            unset($filesToMove['.']);
+            unset($filesToMove['..']);
+            $filesToMoveCounter = count($filesToMove);
+        }
 
-        if($filesToMove->count() > 0) {
+        if($filesToMoveCounter > 0) {
             $i = 0;
             foreach ($filesToMove as $fileToMove) {
                 if ($i >=$this->options['wasatch-file-limit'] ) {
                     break;
                 }
-                $fileSystem->rename(
-                    $fileToMove->getRealPath(), $this->arguments['destination'] . '/' . $fileToMove->getFilename(), true
-                );
-                $msg = sprintf(
-                    'File %s moved from %s to %s',
-                    $fileToMove->getFilename(),
-                    $this->arguments['source'], $this->arguments['destination']
-                );
+                if ($this->options['local-source'] == 1) {
+                    $fileSystem->rename(
+                        $fileToMove->getRealPath(),
+                        $this->arguments['destination'] . DIRECTORY_SEPARATOR .
+                        $fileToMove->getFilename(), true
+                    );
+                    $msg = sprintf(
+                        'File %s moved from %s to %s',
+                        $fileToMove->getFilename(),
+                        $this->arguments['source'], $this->arguments['destination']
+                    );
+                    $this->logger->info($msg);
+                    $io->success($msg);
+                } else {
+                    if(substr(
+                            $fileToMove['filename'], -4
+                        ) === substr(
+                            $this->options['wasatch-file-extension'], -4
+                        ) && $fileToMove['type'] === 1
+                    ) {
+                        $sftp = $this->_connectToSftp($io);
+                        $successDownload = $sftp->get(
+                            $this->arguments['source'] . DIRECTORY_SEPARATOR . $fileToMove['filename'],
+                            $this->arguments['destination'] . DIRECTORY_SEPARATOR . $fileToMove['filename']
+                        );
 
-                $this->logger->info($msg);
-                $io->success($msg);
+                        if ($successDownload === true) {
+                            $successDelete = $sftp->delete(
+                                $this->arguments['source'] . DIRECTORY_SEPARATOR . $fileToMove['filename']
+                            );
+                            if($successDelete === true) {
+                                $msg = sprintf(
+                                    'Remote file %s moved from %s to %s',
+                                    $fileToMove['filename'],
+                                    $this->arguments['source'], $this->arguments['destination']
+                                );
+                                $this->logger->info($msg);
+                                $io->success($msg);
+                            } else {
+                                $msg = sprintf(
+                                    'Remote file %s can\'t be deleted from %s',
+                                    $fileToMove['filename'],
+                                    $this->arguments['source']
+                                );
+                                $this->logger->error($msg);
+                                $io->error($msg);
+                            }
+                        } else {
+                            $msg = sprintf(
+                                'Remote file %s can\'t be retrieved from %s',
+                                $fileToMove['filename'],
+                                $this->arguments['source']
+                            );
+                            $this->logger->error($msg);
+                            $io->error($msg);
+                        }
+                    }
+                }
                 $i++;
             }
         }
