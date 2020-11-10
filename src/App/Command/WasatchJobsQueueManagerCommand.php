@@ -155,9 +155,9 @@ class WasatchJobsQueueManagerCommand extends Command
         } else {
             $sftp = $this->_connectToSftp($io);
             $filesToMove = $sftp->rawlist($this->arguments['source']);
+            $filesToMoveCounter = count($filesToMove) - 2;
             unset($filesToMove['.']);
             unset($filesToMove['..']);
-            $filesToMoveCounter = count($filesToMove);
         }
 
         if($filesToMoveCounter > 0) {
